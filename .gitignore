@@ -1,0 +1,27 @@
+# Arquivos de configuração pessoal do Visual Studio
+*.suo
+*.user
+*.user.*
+*.sln.docstates
+
+# Pasta de configuração do Visual Studio
+.vs/
+
+# Pastas de Build (compilação)
+[Bb]uild/
+[Dd]ebug/
+[Rr]elease/
+x64/
+Win32/
+ARM/
+ARM64/
+
+# Arquivos gerados pela compilação e bibliotecas
+*.lib
+*.dll
+*.obj
+*.pdb
+*.exe
+*.ilk
+*.pch
+*.tlog
