@@ -24,7 +24,7 @@ vector<Vertex> currentPoints;     // Armazena os pontos (1 ou 2) do triângulo a
 GLuint VAO_triangles, VBO_triangles;
 GLuint VAO_points, VBO_points;
 
-// Protótipos
+
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode);
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
 GLuint setupShader();
