@@ -2,8 +2,8 @@
 
 Introdução à OpenGL Moderna – Shaders & Buffers
 
-**Integrante:**
-- Taimisson de Carvalho Schardosim
+**Autor:**
+- Guilherme Lenzi
 
 ## Como executar (CLion)
 - Abra o projeto no CLion.
