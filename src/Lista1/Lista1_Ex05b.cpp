@@ -2,7 +2,6 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
-// Protótipos
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode);
 GLuint setupShader();
 GLuint setupGeometry(); // Função que será modificada
