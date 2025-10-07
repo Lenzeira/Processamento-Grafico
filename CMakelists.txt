@@ -49,24 +49,24 @@ include_directories(${stb_image_SOURCE_DIR})
 # Atualizado: HelloTriangle agora está em Exercicios/Lista2/HelloTriangle
 set(EXERCISES
     Lista2/HelloTriangle
-    Lista1/L1_Ex05a
-    Lista1/L1_Ex05b
-    Lista1/L1_Ex05c
-    Lista1/L1_Ex05d
-    Lista1/L1_Ex06
-    Lista1/L1_Ex06a
-    Lista1/L1_Ex06b
-    Lista1/L1_Ex06c
-    Lista1/L1_Ex06d
-    Lista1/L1_Ex06e
-    Lista1/L1_Ex07
-    Lista1/L1_Ex08
-    Lista1/L1_Ex09
-    Lista2/L2_Ex01
-    Lista2/L2_Ex02
-    Lista2/L2_Ex04
-    Lista2/L2_Ex05
-    Lista2/L2_Ex06
+    Lista1/Lista1_Ex05a
+    Lista1/Lista1_Ex05b
+    Lista1/Lista1_Ex05c
+    Lista1/Lista1_Ex05d
+    Lista1/Lista1_Ex06
+    Lista1/Lista1_Ex06a
+    Lista1/Lista1_Ex06b
+    Lista1/Lista1_Ex06c
+    Lista1/Lista1_Ex06d
+    Lista1/Lista1_Ex06e
+    Lista1/Lista1_Ex07
+    Lista1/Lista1_Ex08
+    Lista1/Lista1_Ex09
+    Lista2/Lista2_Ex01
+    Lista2/Lista2_Ex02
+    Lista2/Lista2_Ex04
+    Lista2/Lista2_Ex05
+    Lista2/Lista2_Ex06
     Lista2/HelloOrtho
     Lista2/HelloSprites
     Lista2/HelloTransforms
