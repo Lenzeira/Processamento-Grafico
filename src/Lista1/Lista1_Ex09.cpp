@@ -1,147 +1,246 @@
-// Lista1_Ex09.cpp - Casa com VBO Unificado e Janela
 #include <iostream>
 #include <string>
-#include <vector>
+using namespace std;
+
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
-// Protótipos
-void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode);
+GLuint vaoRoofBorder, vaoRoofFill;
+GLuint vaoWallLeft, vaoWallRight;
+GLuint vaoWindowFill, vaoWindowBorder, vaoWinCrossV, vaoWinCrossH;
+GLuint vaoDoorFrame, vaoDoorFill, vaoGround;
+GLuint vaoRoofBase;
+
+void key_callback(GLFWwindow* w, int k, int sc, int action, int mods);
 GLuint setupShader();
-GLuint setupGeometry();
+void setupGeometry();
+static void makeVAO(const GLfloat* data, size_t count, GLuint& vaoOut);
 
 const GLuint WIDTH = 800, HEIGHT = 600;
 
-// Shaders de cor uniforme
-const GLchar* vertexShaderSource = R"(
-    #version 400
-    layout (location = 0) in vec3 position;
-    void main() { gl_Position = vec4(position, 1.0); }
+const GLchar* vsSrc = R"(
+#version 400
+layout (location = 0) in vec3 position;
+void main() { gl_Position = vec4(position, 1.0); }
 )";
 
-const GLchar* fragmentShaderSource = R"(
-    #version 400
-    uniform vec4 inputColor;
-    out vec4 color;
-    void main() { color = inputColor; }
+const GLchar* fsSrc = R"(
+#version 400
+uniform vec4 inputColor;
+out vec4 color;
+void main() { color = inputColor; }
 )";
 
-int main()
-{
-    glfwInit();
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+int main() {
+	glfwInit();
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    GLFWwindow* window = glfwCreateWindow(WIDTH, HEIGHT, "Exercicio 9 - Casa com Janela", nullptr, nullptr);
-    glfwMakeContextCurrent(window);
-    glfwSetKeyCallback(window, key_callback);
-    gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
+	GLFWwindow* win = glfwCreateWindow(WIDTH, HEIGHT, "Casinha - OpenGL", nullptr, nullptr);
+	if (!win) { cerr << "Falha ao criar a janela\n"; glfwTerminate(); return -1; }
+	glfwMakeContextCurrent(win);
+	glfwSetKeyCallback(win, key_callback);
 
-    GLuint shaderID = setupShader();
-    GLuint VAO = setupGeometry();
-    glUseProgram(shaderID);
-    GLint uColor = glGetUniformLocation(shaderID, "inputColor");
-    
-    while (!glfwWindowShouldClose(window))
-    {
-        glfwPollEvents();
-        glClearColor(0.9f, 0.9f, 1.0f, 1.0f); // Fundo azul claro (céu)
-        glClear(GL_COLOR_BUFFER_BIT);
+	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) { cerr << "Falha GLAD\n"; return -1; }
 
-        glBindVertexArray(VAO);
+	int fbw, fbh; glfwGetFramebufferSize(win, &fbw, &fbh);
+	glViewport(0, 0, fbw, fbh);
 
-        // Chão Laranja (6 vértices, começando do índice 0)
-        glUniform4f(uColor, 0.8f, 0.6f, 0.2f, 1.0f);
-        glDrawArrays(GL_TRIANGLES, 0, 6);
+	GLuint prog = setupShader();
+	glUseProgram(prog);
+	setupGeometry();
 
-        // Paredes da casa (bege) (6 vértices, começando do índice 6)
-        glUniform4f(uColor, 0.9f, 0.85f, 0.7f, 1.0f);
-        glDrawArrays(GL_TRIANGLES, 6, 6);
+	GLint uColor = glGetUniformLocation(prog, "inputColor");
 
-        // Telhado (vermelho) (3 vértices, começando do índice 12)
-        glUniform4f(uColor, 0.8f, 0.2f, 0.2f, 1.0f);
-        glDrawArrays(GL_TRIANGLES, 12, 3);
+	double prev = glfwGetTime(), cd = 0.1;
+	while (!glfwWindowShouldClose(win)) {
+		double now = glfwGetTime(), dt = now - prev; prev = now;
+		cd -= dt;
+		if (cd <= 0.0 && dt > 0.0) {
+			double fps = 1.0 / dt;
+			char buf[96]; sprintf(buf, "Casinha - OpenGL | FPS %.2lf", fps);
+			glfwSetWindowTitle(win, buf);
+			cd = 0.1;
+		}
 
-        // Porta (marrom escuro) (6 vértices, começando do índice 15)
-        glUniform4f(uColor, 0.4f, 0.2f, 0.0f, 1.0f);
-        glDrawArrays(GL_TRIANGLES, 15, 6);
-    
-        // Janela (amarela) (6 vértices, começando do índice 21)
-        glUniform4f(uColor, 1.0f, 0.9f, 0.0f, 1.0f);
-        glDrawArrays(GL_TRIANGLES, 21, 6);
+		glfwPollEvents();
+		glClearColor(0.7f, 0.85f, 1.0f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT);
 
+		glBindVertexArray(vaoGround);
+		glUniform4f(uColor, 0.2f, 0.6f, 0.2f, 1.0f);
+		glDrawArrays(GL_TRIANGLES, 0, 6);
 
-        glBindVertexArray(0);
-        glfwSwapBuffers(window);
-    }
-    
-    glDeleteVertexArrays(1, &VAO);
-    glfwTerminate();
-    return 0;
+		glBindVertexArray(vaoRoofBorder);
+		glUniform4f(uColor, 0.0f, 0.0f, 0.3f, 1.0f);
+		glDrawArrays(GL_TRIANGLES, 0, 3);
+
+		glBindVertexArray(vaoWallLeft);
+		glDrawArrays(GL_TRIANGLES, 0, 6);
+		glBindVertexArray(vaoWallRight);
+		glDrawArrays(GL_TRIANGLES, 0, 6);
+
+		glBindVertexArray(vaoWindowBorder);
+		glDrawArrays(GL_TRIANGLES, 0, 6);
+
+		glBindVertexArray(vaoDoorFrame);
+		glDrawArrays(GL_TRIANGLES, 0, 6);
+		glBindVertexArray(vaoDoorFill);
+		glUniform4f(uColor, 0.6f, 0.4f, 0.2f, 1.0f);
+		glDrawArrays(GL_TRIANGLES, 0, 6);
+
+		glBindVertexArray(vaoWindowFill);
+		glUniform4f(uColor, 0.5f, 0.9f, 1.0f, 1.0f);
+		glDrawArrays(GL_TRIANGLES, 0, 6);
+
+		glUniform4f(uColor, 0.0f, 0.0f, 0.3f, 1.0f);
+		glBindVertexArray(vaoWinCrossV);
+		glDrawArrays(GL_TRIANGLES, 0, 6);
+		glBindVertexArray(vaoWinCrossH);
+		glDrawArrays(GL_TRIANGLES, 0, 6);
+
+		glBindVertexArray(vaoRoofFill);
+		glUniform4f(uColor, 0.3f, 0.3f, 0.4f, 1.0f);
+		glDrawArrays(GL_TRIANGLES, 0, 3);
+
+		glBindVertexArray(vaoRoofBase);
+		glUniform4f(uColor, 0.0f, 0.0f, 0.3f, 1.0f);
+		glDrawArrays(GL_TRIANGLES, 0, 6);
+
+		glfwSwapBuffers(win);
+	}
+
+	GLuint vaos[] = { vaoRoofBorder,vaoRoofFill,vaoWallLeft,vaoWallRight,
+					  vaoWindowFill,vaoWindowBorder,vaoWinCrossV,vaoWinCrossH,
+					  vaoDoorFrame,vaoDoorFill,vaoGround };
+	for (GLuint v : vaos) glDeleteVertexArrays(1, &v);
+
+	glfwTerminate();
+	return 0;
 }
 
-GLuint setupGeometry()
-{
-    std::vector<GLfloat> allVertices;
-
-    // Vértices do chão (6 vértices) - Offset 0
-    GLfloat ground[] = { -1.0f, -0.6f, 0.0f, 1.0f, -0.6f, 0.0f, 1.0f, -0.5f, 0.0f,
-                         -1.0f, -0.6f, 0.0f, 1.0f, -0.5f, 0.0f, -1.0f, -0.5f, 0.0f };
-    allVertices.insert(allVertices.end(), std::begin(ground), std::end(ground));
-
-    // Vértices das paredes (6 vértices) - Offset 6
-    GLfloat walls[] = { -0.4f, -0.5f, 0.0f, 0.4f, -0.5f, 0.0f, 0.4f,  0.2f, 0.0f,
-                        -0.4f, -0.5f, 0.0f, 0.4f,  0.2f, 0.0f, -0.4f,  0.2f, 0.0f };
-    allVertices.insert(allVertices.end(), std::begin(walls), std::end(walls));
-
-    // Vértices do telhado (3 vértices) - Offset 12
-    GLfloat roof[] = { -0.5f, 0.2f, 0.0f, 0.5f, 0.2f, 0.0f, 0.0f, 0.7f, 0.0f };
-    allVertices.insert(allVertices.end(), std::begin(roof), std::end(roof));
-
-    // Vértices da porta (6 vértices) - Offset 15
-    GLfloat door[] = { -0.1f, -0.5f, 0.0f, 0.1f, -0.5f, 0.0f, 0.1f, 0.0f, 0.0f,
-                       -0.1f, -0.5f, 0.0f, 0.1f,  0.0f, 0.0f, -0.1f, 0.0f, 0.0f };
-    allVertices.insert(allVertices.end(), std::begin(door), std::end(door));
-    
-    // Vértices da janela (6 vértices) - Offset 21
-    GLfloat window_quad[] = { 0.15f, -0.1f, 0.0f, 0.35f, -0.1f, 0.0f, 0.35f, 0.1f, 0.0f,
-                              0.15f, -0.1f, 0.0f, 0.35f,  0.1f, 0.0f, 0.15f, 0.1f, 0.0f };
-    allVertices.insert(allVertices.end(), std::begin(window_quad), std::end(window_quad));
-
-    
-    GLuint VBO, VAO;
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
-    glBindVertexArray(VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, allVertices.size() * sizeof(GLfloat), allVertices.data(), GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    return VAO;
+void key_callback(GLFWwindow* w, int key, int, int action, int) {
+	if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) glfwSetWindowShouldClose(w, GL_TRUE);
 }
 
-void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode)
-{
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
-        glfwSetWindowShouldClose(window, GL_TRUE);
+GLuint setupShader() {
+	GLint ok; GLchar log[512];
+	GLuint vs = glCreateShader(GL_VERTEX_SHADER);
+	glShaderSource(vs, 1, &vsSrc, NULL);
+	glCompileShader(vs); glGetShaderiv(vs, GL_COMPILE_STATUS, &ok);
+	if (!ok) { glGetShaderInfoLog(vs, 512, NULL, log); cerr << "VS:\n" << log << endl; }
+
+	GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
+	glShaderSource(fs, 1, &fsSrc, NULL);
+	glCompileShader(fs); glGetShaderiv(fs, GL_COMPILE_STATUS, &ok);
+	if (!ok) { glGetShaderInfoLog(fs, 512, NULL, log); cerr << "FS:\n" << log << endl; }
+
+	GLuint prog = glCreateProgram();
+	glAttachShader(prog, vs); glAttachShader(prog, fs);
+	glLinkProgram(prog); glGetProgramiv(prog, GL_LINK_STATUS, &ok);
+	if (!ok) { glGetProgramInfoLog(prog, 512, NULL, log); cerr << "LINK:\n" << log << endl; }
+	glDeleteShader(vs); glDeleteShader(fs);
+	return prog;
 }
 
-int setupShader()
-{
-	GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
-	glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
-	glCompileShader(vertexShader);
-	GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-	glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
-	glCompileShader(fragmentShader);
-	GLuint shaderProgram = glCreateProgram();
-	glAttachShader(shaderProgram, vertexShader);
-	glAttachShader(shaderProgram, fragmentShader);
-	glLinkProgram(shaderProgram);
-	glDeleteShader(vertexShader);
-	glDeleteShader(fragmentShader);
-	return shaderProgram;
+static void makeVAO(const GLfloat* data, size_t count, GLuint& vaoOut) {
+	GLuint vbo;
+	glGenVertexArrays(1, &vaoOut);
+	glGenBuffers(1, &vbo);
+	glBindVertexArray(vaoOut);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo);
+	glBufferData(GL_ARRAY_BUFFER, count * sizeof(GLfloat), data, GL_STATIC_DRAW);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
+	glEnableVertexAttribArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindVertexArray(0);
+}
+
+void setupGeometry() {
+	const float yTopHouse = 0.20f;
+	const float yBotHouse = -0.55f;
+	const float xLeft = -0.35f;
+	const float xRight = 0.35f;
+
+	const GLfloat roofBorder[] = {
+		xLeft - 0.03f, yTopHouse, 0.0f,
+		xRight + 0.03f, yTopHouse, 0.0f,
+		0.0f,          0.65f,     0.0f
+	};
+
+	const GLfloat roofFill[] = {
+		xLeft,  yTopHouse, 0.0f,
+		xRight, yTopHouse, 0.0f,
+		0.0f,   0.60f,     0.0f
+	};
+
+	const float baseT = 0.03f;
+	const GLfloat roofBase[] = {
+		xLeft,  yTopHouse + baseT * 0.5f, 0, xRight, yTopHouse + baseT * 0.5f, 0, xRight, yTopHouse - baseT * 0.5f, 0,
+		xLeft,  yTopHouse + baseT * 0.5f, 0, xRight, yTopHouse - baseT * 0.5f, 0, xLeft,  yTopHouse - baseT * 0.5f, 0
+	};
+
+	const float wallW = 0.03f;
+	const GLfloat wallLeft[] = {
+		xLeft - wallW,yTopHouse,0, xLeft,yTopHouse,0, xLeft,yBotHouse,0,
+		xLeft - wallW,yTopHouse,0, xLeft,yBotHouse,0, xLeft - wallW,yBotHouse,0
+	};
+	const GLfloat wallRight[] = {
+		xRight,yTopHouse,0, xRight + wallW,yTopHouse,0, xRight + wallW,yBotHouse,0,
+		xRight,yTopHouse,0, xRight + wallW,yBotHouse,0, xRight,yBotHouse,0
+	};
+
+	const float xW0 = -0.25f, xW1 = -0.05f, yW0 = -0.05f, yW1 = 0.15f;
+	const float border = 0.02f;
+	const GLfloat windowFill[] = {
+		xW0,yW0,0, xW1,yW0,0, xW1,yW1,0,
+		xW0,yW0,0, xW1,yW1,0, xW0,yW1,0
+	};
+	const GLfloat windowBorder[] = {
+		xW0 - border,yW0 - border,0, xW1 + border,yW0 - border,0, xW1 + border,yW1 + border,0,
+		xW0 - border,yW0 - border,0, xW1 + border,yW1 + border,0, xW0 - border,yW1 + border,0
+	};
+	const float cx = 0.5f * (xW0 + xW1), cy = 0.5f * (yW0 + yW1);
+	const float crossT = 0.01f;
+	const GLfloat winCrossV[] = {
+		cx - crossT, yW0, 0, cx + crossT, yW0, 0, cx + crossT, yW1, 0,
+		cx - crossT, yW0, 0, cx + crossT, yW1, 0, cx - crossT, yW1, 0
+	};
+	const GLfloat winCrossH[] = {
+		xW0, cy - crossT, 0, xW1, cy - crossT, 0, xW1, cy + crossT, 0,
+		xW0, cy - crossT, 0, xW1, cy + crossT, 0, xW0, cy + crossT, 0
+	};
+
+	const float xDf0 = -0.12f, xDf1 = 0.12f, yDf0 = -0.55f, yDf1 = -0.27f;
+	const GLfloat doorFrame[] = {
+		xDf0,yDf0,0, xDf1,yDf0,0, xDf1,yDf1,0,
+		xDf0,yDf0,0, xDf1,yDf1,0, xDf0,yDf1,0
+	};
+	const float xDi0 = -0.08f, xDi1 = 0.08f, yDi0 = -0.55f, yDi1 = -0.30f;
+	const GLfloat doorFill[] = {
+		xDi0,yDi0,0, xDi1,yDi0,0, xDi1,yDi1,0,
+		xDi0,yDi0,0, xDi1,yDi1,0, xDi0,yDi1,0
+	};
+
+	const float yG1 = yBotHouse;
+	const float yG0 = yG1 - 0.035f;
+	const GLfloat ground[] = {
+		-0.92f,yG0,0, 0.92f,yG0,0, 0.92f,yG1,0,
+		-0.92f,yG0,0, 0.92f,yG1,0, -0.92f,yG1,0
+	};
+
+	makeVAO(roofBorder, sizeof(roofBorder) / sizeof(GLfloat), vaoRoofBorder);
+	makeVAO(roofFill, sizeof(roofFill) / sizeof(GLfloat), vaoRoofFill);
+	makeVAO(roofBase, sizeof(roofBase) / sizeof(GLfloat), vaoRoofBase);
+	makeVAO(wallLeft, sizeof(wallLeft) / sizeof(GLfloat), vaoWallLeft);
+	makeVAO(wallRight, sizeof(wallRight) / sizeof(GLfloat), vaoWallRight);
+	makeVAO(windowFill, sizeof(windowFill) / sizeof(GLfloat), vaoWindowFill);
+	makeVAO(windowBorder, sizeof(windowBorder) / sizeof(GLfloat), vaoWindowBorder);
+	makeVAO(winCrossV, sizeof(winCrossV) / sizeof(GLfloat), vaoWinCrossV);
+	makeVAO(winCrossH, sizeof(winCrossH) / sizeof(GLfloat), vaoWinCrossH);
+	makeVAO(doorFrame, sizeof(doorFrame) / sizeof(GLfloat), vaoDoorFrame);
+	makeVAO(doorFill, sizeof(doorFill) / sizeof(GLfloat), vaoDoorFill);
+	makeVAO(ground, sizeof(ground) / sizeof(GLfloat), vaoGround);
 }
