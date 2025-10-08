@@ -1,136 +1,104 @@
 #include <iostream>
 #include <string>
-#include <vector>
+#include <assert.h>
 #include <cmath>
+
+using namespace std;
+
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
-
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode);
-GLuint setupShader();
-GLuint setupGeometry();
+int setupShader();
+int setupGeometry();
 
 const GLuint WIDTH = 800, HEIGHT = 800;
+const int segments = 10000;
 
-// Shaders MODIFICADOS para aceitar cor por vértice
 const GLchar* vertexShaderSource = R"(
     #version 400
-    layout (location = 0) in vec3 aPos;
-    layout (location = 1) in vec3 aColor;
-    out vec3 ourColor;
+    layout (location = 0) in vec3 position;
     void main()
     {
-       gl_Position = vec4(aPos, 1.0);
-       ourColor = aColor;
+	    gl_Position = vec4(position.x, position.y, position.z, 1.0);
     }
 )";
+
 const GLchar* fragmentShaderSource = R"(
     #version 400
-    out vec4 FragColor;
-    in vec3 ourColor;
+    uniform vec4 inputColor;
+    out vec4 color;
     void main()
     {
-       FragColor = vec4(ourColor, 1.0);
+	    color = inputColor;
     }
 )";
 
 int main()
 {
-    glfwInit();
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+	glfwInit();
 
-    GLFWwindow* window = glfwCreateWindow(WIDTH, HEIGHT, "Exercicio 6 - Circulo (com Triangle Fan)", nullptr, nullptr);
-    glfwMakeContextCurrent(window);
-    glfwSetKeyCallback(window, key_callback);
-    gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    GLuint shaderID = setupShader();
-    GLuint VAO = setupGeometry();
-    
-    glUseProgram(shaderID);
+	GLFWwindow* window = glfwCreateWindow(WIDTH, HEIGHT, "Exercicio 6", nullptr, nullptr);
+	if (!window)
+	{
+		std::cerr << "Falha ao criar a janela GLFW" << std::endl;
+		glfwTerminate();
+		return -1;
+	}
+	glfwMakeContextCurrent(window);
+	glfwSetKeyCallback(window, key_callback);
 
-    while (!glfwWindowShouldClose(window))
-    {
-        glfwPollEvents();
-        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+	{
+		std::cerr << "Falha ao inicializar GLAD" << std::endl;
+		return -1;
+	}
 
-        glBindVertexArray(VAO);
-        
-        // A cor agora vem dos atributos do vértice, não de um uniform
-        // O último parâmetro é o número total de vértices a serem desenhados
-        glDrawArrays(GL_TRIANGLE_FAN, 0, 36 + 2); // +2 para o centro e o vértice final que fecha o círculo
+	const GLubyte* renderer = glGetString(GL_RENDERER);
+	const GLubyte* version = glGetString(GL_VERSION);
+	cout << "Renderer: " << renderer << endl;
+	cout << "OpenGL version supported " << version << endl;
 
-        glBindVertexArray(0);
-        glfwSwapBuffers(window);
-    }
+	int width, height;
+	glfwGetFramebufferSize(window, &width, &height);
+	glViewport(0, 0, width, height);
 
-    glDeleteVertexArrays(1, &VAO);
-    glfwTerminate();
-    return 0;
-}
+	GLuint shaderID = setupShader();
+	GLuint VAO = setupGeometry();
+	GLint colorLoc = glGetUniformLocation(shaderID, "inputColor");
 
-// --- Geometria (totalmente reescrita para ser mais eficiente) ---
-int setupGeometry()
-{
-    int segments = 36; // Um círculo com 36 segmentos é bem suave
-    float radius = 0.7f;
-    
-    // Usamos um std::vector para facilitar a adição de vértices
-    std::vector<GLfloat> vertices;
+	glUseProgram(shaderID);
 
-    // Vértice central (branco)
-    vertices.push_back(0.0f); // x
-    vertices.push_back(0.0f); // y
-    vertices.push_back(0.0f); // z
-    vertices.push_back(1.0f); // r
-    vertices.push_back(1.0f); // g
-    vertices.push_back(1.0f); // b
+	while (!glfwWindowShouldClose(window))
+	{
+		glfwPollEvents();
 
-    // Vértices da circunferência (azul ciano)
-    for (int i = 0; i <= segments; i++)
-    {
-        float angle = i * (2.0f * M_PI / segments);
-        // Posição
-        vertices.push_back(cos(angle) * radius);
-        vertices.push_back(sin(angle) * radius);
-        vertices.push_back(0.0f);
-        // Cor
-        vertices.push_back(0.0f); // r
-        vertices.push_back(1.0f); // g
-        vertices.push_back(1.0f); // b
-    }
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT);
 
-    GLuint VBO, VAO;
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
-    glBindVertexArray(VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(GLfloat), vertices.data(), GL_STATIC_DRAW);
+		glLineWidth(10);
+		glPointSize(20);
 
-    // Atributo de Posição (layout location = 0)
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (void*)0);
-    glEnableVertexAttribArray(0);
+		glBindVertexArray(VAO);
+		glUniform4f(colorLoc, 1.0f, 0.0f, 1.0f, 1.0f);
+		glDrawArrays(GL_TRIANGLES, 0, segments * 9);
 
-    // Atributo de Cor (layout location = 1)
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (void*)(3 * sizeof(GLfloat)));
-    glEnableVertexAttribArray(1);
-
-    glBindBuffer(GL_ARRAY_BUFFER, 0); 
-    glBindVertexArray(0);
-
-    return VAO;
+		glfwSwapBuffers(window);
+	}
+	glDeleteVertexArrays(1, &VAO);
+	glfwTerminate();
+	return 0;
 }
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode)
 {
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
-        glfwSetWindowShouldClose(window, GL_TRUE);
+	if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
+		glfwSetWindowShouldClose(window, GL_TRUE);
 }
 
 int setupShader()
@@ -138,14 +106,84 @@ int setupShader()
 	GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
 	glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
 	glCompileShader(vertexShader);
+	GLint success;
+	GLchar infoLog[512];
+	glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
+	if (!success)
+	{
+		glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
+		std::cout << "ERROR::SHADER::VERTEX::COMPILATION_FAILED\n" << infoLog << std::endl;
+	}
 	GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
 	glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
 	glCompileShader(fragmentShader);
+	glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
+	if (!success)
+	{
+		glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
+		std::cout << "ERROR::SHADER::FRAGMENT::COMPILATION_FAILED\n" << infoLog << std::endl;
+	}
 	GLuint shaderProgram = glCreateProgram();
 	glAttachShader(shaderProgram, vertexShader);
 	glAttachShader(shaderProgram, fragmentShader);
 	glLinkProgram(shaderProgram);
+	glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
+	if (!success)
+	{
+		glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
+		std::cout << "ERROR::SHADER::PROGRAM::LINKING_FAILED\n" << infoLog << std::endl;
+	}
 	glDeleteShader(vertexShader);
 	glDeleteShader(fragmentShader);
+
 	return shaderProgram;
+}
+
+int setupGeometry()
+{
+	static const float centerX = 0.0f;
+	static const float centerY = 0.0f;
+	static const float radius = 0.5f;
+	static const float angleStep = 2.0f * M_PI / segments;
+
+	GLfloat vertices[segments * 9];
+
+	for (int i = 0; i < segments; ++i) {
+		const float theta1 = angleStep * i;
+		const float theta2 = angleStep * (i + 1);
+
+		const float cos1 = radius * cos(theta1);
+		const float sin1 = radius * sin(theta1);
+		const float cos2 = radius * cos(theta2);
+		const float sin2 = radius * sin(theta2);
+
+		const int baseIndex = i * 9;
+
+		vertices[baseIndex] = centerX;
+		vertices[baseIndex + 1] = centerY;
+		vertices[baseIndex + 2] = 0.0f;
+
+		vertices[baseIndex + 3] = centerX + cos1;
+		vertices[baseIndex + 4] = centerY + sin1;
+		vertices[baseIndex + 5] = 0.0f;
+
+		vertices[baseIndex + 6] = centerX + cos2;
+		vertices[baseIndex + 7] = centerY + sin2;
+		vertices[baseIndex + 8] = 0.0f;
+	}
+
+	GLuint VBO, VAO;
+	glGenBuffers(1, &VBO);
+	glBindBuffer(GL_ARRAY_BUFFER, VBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+	glGenVertexArrays(1, &VAO);
+	glBindVertexArray(VAO);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
+	glEnableVertexAttribArray(0);
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindVertexArray(0);
+
+	return VAO;
 }
