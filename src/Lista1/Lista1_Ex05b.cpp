@@ -1,15 +1,19 @@
 #include <iostream>
+#include <string>
+#include <assert.h>
+
+using namespace std;
+
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
-void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode);
-GLuint setupShader();
-GLuint setupGeometry(); // Função que será modificada
+void key_callback(GLFWwindow *window, int key, int scancode, int action, int mode);
+int setupShader();
+int setupGeometry();
 
 const GLuint WIDTH = 800, HEIGHT = 600;
 
-// Shaders (sem alteração)
-const GLchar* vertexShaderSource = R"(
+const GLchar *vertexShaderSource = R"(
     #version 400
     layout (location = 0) in vec3 position;
     void main()
@@ -17,10 +21,11 @@ const GLchar* vertexShaderSource = R"(
 	    gl_Position = vec4(position.x, position.y, position.z, 1.0);
     }
 )";
-const GLchar* fragmentShaderSource = R"(
+
+const GLchar *fragmentShaderSource = R"(
     #version 400
-    out vec4 color;
     uniform vec4 inputColor;
+    out vec4 color;
     void main()
     {
 	    color = inputColor;
@@ -29,118 +34,137 @@ const GLchar* fragmentShaderSource = R"(
 
 int main()
 {
-    // --- Inicialização (sem alteração) ---
-    glfwInit();
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+	glfwInit();
+
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    GLFWwindow* window = glfwCreateWindow(WIDTH, HEIGHT, "Exercicio 5b - Contorno (com EBO)", nullptr, nullptr);
-    glfwMakeContextCurrent(window);
-    glfwSetKeyCallback(window, key_callback);
-    gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
-    glViewport(0, 0, WIDTH, HEIGHT);
-    
-    // --- Setup dos Shaders e Geometria ---
-    GLuint shaderID = setupShader();
-    GLuint VAO = setupGeometry();
-    GLint colorLoc = glGetUniformLocation(shaderID, "inputColor");
-    
-    glUseProgram(shaderID);
+	GLFWwindow *window = glfwCreateWindow(WIDTH, HEIGHT, "Cor alterada! -- Taimisson", nullptr, nullptr);
+	if (!window)
+	{
+		std::cerr << "Falha ao criar a janela GLFW" << std::endl;
+		glfwTerminate();
+		return -1;
+	}
+	glfwMakeContextCurrent(window);
 
-    // --- Loop de Renderização (modificado) ---
-    while (!glfwWindowShouldClose(window))
-    {
-        glfwPollEvents();
+	glfwSetKeyCallback(window, key_callback);
 
-        glClearColor(0.1f, 0.1f, 0.2f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+	{
+		std::cerr << "Falha ao inicializar GLAD" << std::endl;
+		return -1;
+	}
 
-        glLineWidth(10); // Aumenta a espessura da linha
+	const GLubyte *renderer = glGetString(GL_RENDERER);
+	const GLubyte *version = glGetString(GL_VERSION);
+	cout << "Renderer: " << renderer << endl;
+	cout << "OpenGL version supported " << version << endl;
 
-        glBindVertexArray(VAO);
-        
-        // Define a cor do contorno
-        glUniform4f(colorLoc, 0.2f, 0.5f, 1.0f, 1.0f); // Cor azul
+	int width, height;
+	glfwGetFramebufferSize(window, &width, &height);
+	glViewport(0, 0, width, height);
 
-        // Novas chamadas de desenho usando o Index Buffer (EBO)
-        // Desenhamos dois contornos separados a partir do mesmo buffer de índices
-        glDrawElements(GL_LINE_LOOP, 3, GL_UNSIGNED_INT, 0);
-        glDrawElements(GL_LINE_LOOP, 3, GL_UNSIGNED_INT, (void*)(3 * sizeof(GLuint)));
+	GLuint shaderID = setupShader();
+	GLuint VAO = setupGeometry();
+	GLint colorLoc = glGetUniformLocation(shaderID, "inputColor");
 
-        glBindVertexArray(0);
-        
-        glfwSwapBuffers(window);
-    }
-    
-    // --- Finalização (sem alteração) ---
-    glDeleteVertexArrays(1, &VAO);
-    glfwTerminate();
-    return 0;
+	glUseProgram(shaderID);
+
+	while (!glfwWindowShouldClose(window))
+	{
+		glfwPollEvents();
+
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT);
+
+		glLineWidth(10);
+		glPointSize(20);
+
+		glBindVertexArray(VAO);
+
+		// A COR FOI ALTERADA AQUI para Ciano (0.0f Vermelho, 1.0f Verde, 1.0f Azul)
+		glUniform4f(colorLoc, 0.0f, 1.0f, 1.0f, 1.0f); 
+		
+		glDrawArrays(GL_LINE_LOOP, 0, 3);
+		glDrawArrays(GL_LINE_LOOP, 3, 3);
+
+		glfwSwapBuffers(window);
+	}
+	glDeleteVertexArrays(1, &VAO);
+	glfwTerminate();
+	return 0;
 }
 
-void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode)
+void key_callback(GLFWwindow *window, int key, int scancode, int action, int mode)
 {
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
-        glfwSetWindowShouldClose(window, GL_TRUE);
+	if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
+		glfwSetWindowShouldClose(window, GL_TRUE);
 }
 
-// Função de Shader (sem alteração)
 int setupShader()
 {
 	GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
 	glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
 	glCompileShader(vertexShader);
+	GLint success;
+	GLchar infoLog[512];
+	glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
+	if (!success)
+	{
+		glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
+		std::cout << "ERROR::SHADER::VERTEX::COMPILATION_FAILED\n" << infoLog << std::endl;
+	}
 	GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
 	glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
 	glCompileShader(fragmentShader);
+	glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
+	if (!success)
+	{
+		glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
+		std::cout << "ERROR::SHADER::FRAGMENT::COMPILATION_FAILED\n" << infoLog << std::endl;
+	}
 	GLuint shaderProgram = glCreateProgram();
 	glAttachShader(shaderProgram, vertexShader);
 	glAttachShader(shaderProgram, fragmentShader);
 	glLinkProgram(shaderProgram);
+	glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
+	if (!success)
+	{
+		glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
+		std::cout << "ERROR::SHADER::PROGRAM::LINKING_FAILED\n" << infoLog << std::endl;
+	}
 	glDeleteShader(vertexShader);
 	glDeleteShader(fragmentShader);
+
 	return shaderProgram;
 }
 
-// --- Geometria (modificada para usar EBO) ---
 int setupGeometry()
 {
-    // Apenas os 5 vértices únicos
-    GLfloat vertices[] = {
-        // Posição (x, y, z)
-        -0.5f,  0.5f, 0.0f, // Vértice 0
-        -0.5f, -0.5f, 0.0f, // Vértice 1
-         0.0f,  0.0f, 0.0f, // Vértice 2 (o ponto central)
-         0.5f, -0.5f, 0.0f, // Vértice 3
-         0.5f,  0.5f, 0.0f  // Vértice 4
-    };
+	GLfloat vertices[] = {
+		-0.5,  0.5, 0.0,
+		-0.5, -0.5, 0.0,
+		 0.0,  0.0, 0.0,
+		 0.0,  0.0, 0.0,
+		 0.5, -0.5, 0.0,
+		 0.5,  0.5, 0.0
+	};
 
-    // O "mapa" que conecta os vértices
-    GLuint indices[] = {
-        0, 1, 2,  // Contorno do primeiro triângulo
-        2, 3, 4   // Contorno do segundo triângulo
-    };
+	GLuint VBO, VAO;
+	glGenBuffers(1, &VBO);
+	glBindBuffer(GL_ARRAY_BUFFER, VBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
-    GLuint VBO, VAO, EBO;
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
-    glGenBuffers(1, &EBO);
+	glGenVertexArrays(1, &VAO);
+	glBindVertexArray(VAO);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid *)0);
+	glEnableVertexAttribArray(0);
 
-    glBindVertexArray(VAO);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindVertexArray(0);
 
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-    // Vincula e envia os dados do índice para o EBO
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (void*)0);
-    glEnableVertexAttribArray(0);
-
-    glBindBuffer(GL_ARRAY_BUFFER, 0); 
-    glBindVertexArray(0);
-
-    return VAO;
+	return VAO;
 }
