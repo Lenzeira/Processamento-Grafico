@@ -1,188 +1,160 @@
 #include <iostream>
 #include <string>
 #include <vector>
-#include <cstdlib>
-#include <ctime>
+#include <random>
+#include <assert.h>
+
+using namespace std;
+
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-using namespace std;
 using namespace glm;
-
-// Estrutura para um vértice com posição e cor
-struct Vertex {
-    float x, y, z;
-    float r, g, b;
-};
-
-// Variáveis globais para gerenciar os vértices
-vector<Vertex> finishedTriangles; // Armazena todos os triângulos finalizados
-vector<Vertex> currentPoints;     // Armazena os pontos (1 ou 2) do triângulo atual
-GLuint VAO_triangles, VBO_triangles;
-GLuint VAO_points, VBO_points;
-
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode);
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
-GLuint setupShader();
-void setupGeometry();
-vec3 generateRandomColor();
+int setupShader();
+int setupGeometry();
 
 const GLuint WIDTH = 800, HEIGHT = 600;
 
 const GLchar* vertexShaderSource = R"(
     #version 400
     layout (location = 0) in vec3 position;
-    layout (location = 1) in vec3 color;
-    out vec3 vColor;
     uniform mat4 projection;
-    void main() {
-        gl_Position = projection * vec4(position, 1.0);
-        vColor = color;
+    void main()
+    {
+	    gl_Position = projection * vec4(position, 1.0);
     }
 )";
+
 const GLchar* fragmentShaderSource = R"(
     #version 400
-    in vec3 vColor;
+    uniform vec4 inputColor;
     out vec4 color;
-    void main() {
-        color = vec4(vColor, 1.0);
+    void main()
+    {
+	    color = inputColor;
     }
 )";
+
+static vector<vec3> g_pending;
+static vector<vec3> g_vertices;
+static vector<vec4> g_colors;
+static GLuint gVBO = 0;
+static GLuint gVAO = 0;
 
 int main()
 {
-    glfwInit();
-    srand(time(nullptr)); // Inicializa o gerador de números aleatórios
-    GLFWwindow* window = glfwCreateWindow(WIDTH, HEIGHT, "Exercicio 6 - Criando Triangulos com Mouse", nullptr, nullptr);
-    glfwMakeContextCurrent(window);
+	glfwInit();
 
-    // Registra os callbacks
-    glfwSetKeyCallback(window, key_callback);
-    glfwSetMouseButtonCallback(window, mouse_button_callback);
+	GLFWwindow* window = glfwCreateWindow(WIDTH, HEIGHT, "L2_Ex06 - Clique para criar triangulos", nullptr, nullptr);
+	if (!window)
+	{
+		std::cerr << "Falha ao criar a janela GLFW" << std::endl;
+		glfwTerminate();
+		return -1;
+	}
+	glfwMakeContextCurrent(window);
 
-    gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
+	glfwSetKeyCallback(window, key_callback);
+	glfwSetMouseButtonCallback(window, mouse_button_callback);
 
-    GLuint shaderID = setupShader();
-    setupGeometry();
-    glUseProgram(shaderID);
+	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+	{
+		std::cerr << "Falha ao inicializar GLAD" << std::endl;
+		return -1;
+	}
 
-    // Configura a projeção ortográfica para corresponder à tela
-    mat4 projection = ortho(0.0f, (float)WIDTH, (float)HEIGHT, 0.0f, -1.0f, 1.0f);
-    glUniformMatrix4fv(glGetUniformLocation(shaderID, "projection"), 1, GL_FALSE, value_ptr(projection));
+	const GLubyte* renderer = glGetString(GL_RENDERER);
+	const GLubyte* version = glGetString(GL_VERSION);
+	cout << "Renderer: " << renderer << endl;
+	cout << "OpenGL version supported " << version << endl;
 
-    cout << "Clique na tela para criar vertices. A cada 3 cliques, um triangulo sera formado." << endl;
+	GLuint shaderID = setupShader();
+	glUseProgram(shaderID);
 
-    while (!glfwWindowShouldClose(window))
-    {
-        glfwPollEvents();
-        glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-        glPointSize(10.0f);
+	gVAO = setupGeometry();
 
-        // 1. Desenha todos os triângulos que já foram finalizados
-        if (!finishedTriangles.empty())
-        {
-            glBindVertexArray(VAO_triangles);
-            glDrawArrays(GL_TRIANGLES, 0, finishedTriangles.size());
-        }
+	GLint projLoc = glGetUniformLocation(shaderID, "projection");
+	GLint colorLoc = glGetUniformLocation(shaderID, "inputColor");
 
-        // 2. Desenha os pontos do triângulo que está sendo criado
-        if (!currentPoints.empty())
-        {
-            glBindVertexArray(VAO_points);
-            // Atualiza o VBO dos pontos a cada frame (caso necessário)
-            glBindBuffer(GL_ARRAY_BUFFER, VBO_points);
-            glBufferData(GL_ARRAY_BUFFER, currentPoints.size() * sizeof(Vertex), currentPoints.data(), GL_DYNAMIC_DRAW);
-            glDrawArrays(GL_POINTS, 0, currentPoints.size());
-        }
+	while (!glfwWindowShouldClose(window))
+	{
+		glfwPollEvents();
 
-        glBindVertexArray(0);
-        glfwSwapBuffers(window);
-    }
+		glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT);
 
-    glDeleteVertexArrays(1, &VAO_triangles);
-    glDeleteBuffers(1, &VBO_triangles);
-    glDeleteVertexArrays(1, &VAO_points);
-    glDeleteBuffers(1, &VBO_points);
-    glfwTerminate();
-    return 0;
-}
+		int fbw, fbh;
+		glfwGetFramebufferSize(window, &fbw, &fbh);
+		mat4 projection = ortho(0.0, static_cast<double>(fbw), static_cast<double>(fbh), 0.0, -1.0, 1.0);
+		glUniformMatrix4fv(projLoc, 1, GL_FALSE, value_ptr(projection));
 
-void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
-{
-    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
-    {
-        double xpos, ypos;
-        glfwGetCursorPos(window, &xpos, &ypos);
+		glBindBuffer(GL_ARRAY_BUFFER, gVBO);
+		if (!g_vertices.empty())
+		{
+			glBufferData(GL_ARRAY_BUFFER, g_vertices.size() * sizeof(vec3), g_vertices.data(), GL_DYNAMIC_DRAW);
+		}
+		else
+		{
+			glBufferData(GL_ARRAY_BUFFER, 0, nullptr, GL_DYNAMIC_DRAW);
+		}
 
-        // Cor para o próximo triângulo. É gerada no primeiro clique.
-        static vec3 currentColor = generateRandomColor();
+		glBindVertexArray(gVAO);
+		size_t triCount = g_vertices.size() / 3;
+		for (size_t i = 0; i < triCount; ++i)
+		{
+			const vec4& c = g_colors[i];
+			glUniform4f(colorLoc, c.r, c.g, c.b, c.a);
+			glDrawArrays(GL_TRIANGLES, static_cast<GLint>(i * 3), 3);
+		}
+		glBindVertexArray(0);
 
-        // Adiciona o novo ponto à lista de pontos atuais
-        currentPoints.push_back({ (float)xpos, (float)ypos, 0.0f, currentColor.r, currentColor.g, currentColor.b });
+		glfwSwapBuffers(window);
+	}
 
-        // Se acabamos de adicionar o 3º ponto, um triângulo está completo
-        if (currentPoints.size() == 3)
-        {
-            // Move os 3 pontos para a lista de triângulos finalizados
-            finishedTriangles.insert(finishedTriangles.end(), currentPoints.begin(), currentPoints.end());
-            currentPoints.clear(); // Limpa a lista de pontos para o próximo triângulo
-
-            // Atualiza o VBO dos triângulos com os novos dados
-            glBindVertexArray(VAO_triangles);
-            glBindBuffer(GL_ARRAY_BUFFER, VBO_triangles);
-            glBufferData(GL_ARRAY_BUFFER, finishedTriangles.size() * sizeof(Vertex), finishedTriangles.data(), GL_DYNAMIC_DRAW);
-            
-            // Gera uma nova cor para o próximo triângulo
-            currentColor = generateRandomColor();
-        }
-    }
-}
-
-void setupGeometry()
-{
-    // VAO/VBO para os triângulos finalizados
-    glGenVertexArrays(1, &VAO_triangles);
-    glGenBuffers(1, &VBO_triangles);
-    glBindVertexArray(VAO_triangles);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO_triangles);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, x));
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, r));
-    glEnableVertexAttribArray(1);
-
-    // VAO/VBO para os pontos do triângulo em formação
-    glGenVertexArrays(1, &VAO_points);
-    glGenBuffers(1, &VBO_points);
-    glBindVertexArray(VAO_points);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO_points);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, x));
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, r));
-    glEnableVertexAttribArray(1);
-
-    glBindVertexArray(0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-}
-
-vec3 generateRandomColor()
-{
-    // Gera cores mais vivas, evitando tons muito escuros
-    return vec3(
-        (rand() % 128 + 128) / 255.0f,
-        (rand() % 128 + 128) / 255.0f,
-        (rand() % 128 + 128) / 255.0f
-    );
+	if (gVAO) glDeleteVertexArrays(1, &gVAO);
+	if (gVBO) glDeleteBuffers(1, &gVBO);
+	glfwTerminate();
+	return 0;
 }
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode)
 {
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
-        glfwSetWindowShouldClose(window, GL_TRUE);
+	if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
+		glfwSetWindowShouldClose(window, GL_TRUE);
+}
+
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
+{
+	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+	{
+		double xpos, ypos;
+		glfwGetCursorPos(window, &xpos, &ypos);
+		g_pending.emplace_back(static_cast<float>(xpos), static_cast<float>(ypos), 0.0f);
+
+		if (g_pending.size() == 3)
+		{
+			g_vertices.push_back(g_pending[0]);
+			g_vertices.push_back(g_pending[1]);
+			g_vertices.push_back(g_pending[2]);
+
+			std::random_device rd;
+			std::mt19937 gen(rd());
+			std::uniform_real_distribution<float> r_dist(0.3f, 0.6f);
+			std::uniform_real_distribution<float> g_dist(0.1f, 0.4f);
+			std::uniform_real_distribution<float> b_dist(0.7f, 1.0f);
+
+			vec4 color(r_dist(gen), g_dist(gen), b_dist(gen), 1.0f);
+			g_colors.push_back(color);
+
+			g_pending.clear();
+		}
+	}
 }
 
 int setupShader()
@@ -190,14 +162,59 @@ int setupShader()
 	GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
 	glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
 	glCompileShader(vertexShader);
+
+	GLint success;
+	GLchar infoLog[512];
+	glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
+	if (!success)
+	{
+		glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
+		std::cout << "ERROR::SHADER::VERTEX::COMPILATION_FAILED\n" << infoLog << std::endl;
+	}
+
 	GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
 	glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
 	glCompileShader(fragmentShader);
+
+	glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
+	if (!success)
+	{
+		glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
+		std::cout << "ERROR::SHADER::FRAGMENT::COMPILATION_FAILED\n" << infoLog << std::endl;
+	}
+
 	GLuint shaderProgram = glCreateProgram();
 	glAttachShader(shaderProgram, vertexShader);
 	glAttachShader(shaderProgram, fragmentShader);
 	glLinkProgram(shaderProgram);
+
+	glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
+	if (!success)
+	{
+		glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
+		std::cout << "ERROR::SHADER::PROGRAM::LINKING_FAILED\n" << infoLog << std::endl;
+	}
+
 	glDeleteShader(vertexShader);
 	glDeleteShader(fragmentShader);
+
 	return shaderProgram;
+}
+
+int setupGeometry()
+{
+	glGenBuffers(1, &gVBO);
+	glBindBuffer(GL_ARRAY_BUFFER, gVBO);
+	glBufferData(GL_ARRAY_BUFFER, 0, nullptr, GL_DYNAMIC_DRAW);
+
+	glGenVertexArrays(1, &gVAO);
+	glBindVertexArray(gVAO);
+
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(vec3), (GLvoid*)0);
+	glEnableVertexAttribArray(0);
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindVertexArray(0);
+
+	return static_cast<int>(gVAO);
 }
