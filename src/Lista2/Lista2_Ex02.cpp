@@ -1,141 +1,125 @@
 #include <iostream>
 #include <string>
+#include <assert.h>
+
+using namespace std;
+
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-using namespace std;
 using namespace glm;
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode);
-void cursor_position_callback(GLFWwindow* window, double xpos, double ypos); // Novo callback para o mouse
-GLuint setupShader();
-GLuint setupGeometry();
+int setupShader();
+int setupGeometry();
 
 const GLuint WIDTH = 800, HEIGHT = 600;
 
-// Variável global para armazenar a posição do mouse
-vec2 mousePos;
-
-// Shaders MODIFICADOS para aceitar uma matriz de modelo
 const GLchar* vertexShaderSource = R"(
     #version 400
     layout (location = 0) in vec3 position;
-    
-    uniform mat4 model;
+    layout (location = 1) in vec3 color;
+    out vec3 vColor;
     uniform mat4 projection;
-    
     void main()
     {
-        gl_Position = projection * model * vec4(position, 1.0);
+	    gl_Position = projection * vec4(position.x, position.y, position.z, 1.0);
+	    vColor = color;
     }
 )";
+
 const GLchar* fragmentShaderSource = R"(
     #version 400
+    in vec3 vColor;
     out vec4 color;
-    uniform vec4 inputColor;
     void main()
     {
-        color = inputColor;
+	    color = vec4(vColor,1.0);
     }
 )";
 
 int main()
 {
-    glfwInit();
-    GLFWwindow* window = glfwCreateWindow(WIDTH, HEIGHT, "Ex 2 - Objeto seguindo o mouse", nullptr, nullptr);
-    glfwMakeContextCurrent(window);
-    glfwSetKeyCallback(window, key_callback);
-    
-    // --- NOVO: Registrando o callback do mouse ---
-    glfwSetCursorPosCallback(window, cursor_position_callback);
+	glfwInit();
 
-    gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
+	GLFWwindow* window = glfwCreateWindow(WIDTH, HEIGHT, "L2_Ex02 - Ortho(0,800,600,0)", nullptr, nullptr);
+	if (!window)
+	{
+		std::cerr << "Falha ao criar a janela GLFW" << std::endl;
+		glfwTerminate();
+		return -1;
+	}
+	glfwMakeContextCurrent(window);
+	glfwSetKeyCallback(window, key_callback);
 
-    GLuint shaderID = setupShader();
-    GLuint VAO = setupGeometry();
-    glUseProgram(shaderID);
+	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+	{
+		std::cerr << "Falha ao inicializar GLAD" << std::endl;
+		return -1;
+	}
 
-    // Obtém a localização dos uniforms no shader
-    GLint modelLoc = glGetUniformLocation(shaderID, "model");
-    GLint projLoc = glGetUniformLocation(shaderID, "projection");
-    GLint colorLoc = glGetUniformLocation(shaderID, "inputColor");
+	const GLubyte* renderer = glGetString(GL_RENDERER);
+	const GLubyte* version = glGetString(GL_VERSION);
+	cout << "Renderer: " << renderer << endl;
+	cout << "OpenGL version supported " << version << endl;
 
-    // Configura a matriz de projeção UMA VEZ (ela não muda)
-    mat4 projection = ortho(0.0f, (float)WIDTH, (float)HEIGHT, 0.0f, -1.0f, 1.0f);
-    glUniformMatrix4fv(projLoc, 1, GL_FALSE, value_ptr(projection));
+	GLuint shaderID = setupShader();
+	GLuint VAO = setupGeometry();
 
-    while (!glfwWindowShouldClose(window))
-    {
-        glfwPollEvents();
+	glUseProgram(shaderID);
 
-        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+	double prev_s = glfwGetTime();
+	double title_countdown_s = 0.1;
 
-        // --- NOVO: Atualiza a matriz de modelo a cada frame ---
-        mat4 model = mat4(1.0f); // Matriz identidade
-        // Translada o quadrado para a posição atual do mouse
-        model = translate(model, vec3(mousePos.x, mousePos.y, 0.0f));
-        
-        // Envia a nova matriz de modelo para o shader
-        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, value_ptr(model));
+	mat4 projection = ortho(0.0, 800.0, 600.0, 0.0, -1.0, 1.0);
+	glUniformMatrix4fv(glGetUniformLocation(shaderID, "projection"), 1, GL_FALSE, value_ptr(projection));
 
-        // Define a cor do quadrado
-        glUniform4f(colorLoc, 1.0f, 0.5f, 0.2f, 1.0f); // Laranja
+	while (!glfwWindowShouldClose(window))
+	{
+		{
+			double curr_s = glfwGetTime();
+			double elapsed_s = curr_s - prev_s;
+			prev_s = curr_s;
 
-        // Desenha o quadrado
-        glBindVertexArray(VAO);
-        glDrawArrays(GL_TRIANGLES, 0, 6);
-        glBindVertexArray(0);
+			title_countdown_s -= elapsed_s;
+			if (title_countdown_s <= 0.0 && elapsed_s > 0.0)
+			{
+				double fps = 1.0 / elapsed_s;
+				char tmp[256];
+				sprintf(tmp, "L2_Ex02 - Ortho(0,800,600,0)\tFPS %.2lf", fps);
+				glfwSetWindowTitle(window, tmp);
+				title_countdown_s = 0.1;
+			}
+		}
 
-        glfwSwapBuffers(window);
-    }
+		glfwPollEvents();
 
-    glDeleteVertexArrays(1, &VAO);
-    glfwTerminate();
-    return 0;
-}
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT);
 
-// --- NOVA FUNÇÃO: Callback do Cursor ---
-void cursor_position_callback(GLFWwindow* window, double xpos, double ypos)
-{
-    // Atualiza a variável global com a posição do mouse
-    mousePos.x = xpos;
-    mousePos.y = ypos;
+		int width, height;
+		glfwGetFramebufferSize(window, &width, &height);
+		glViewport(0, 0, width, height);
+
+		glBindVertexArray(VAO);
+		glDrawArrays(GL_TRIANGLES, 0, 3);
+		glBindVertexArray(0);
+
+		glfwSwapBuffers(window);
+	}
+
+	glDeleteVertexArrays(1, &VAO);
+	glfwTerminate();
+	return 0;
 }
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode)
 {
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
-        glfwSetWindowShouldClose(window, GL_TRUE);
-}
-
-// Geometria de um quadrado centrado na origem
-int setupGeometry()
-{
-    GLfloat vertices[] = {
-        // Posições
-        -25.0f, -25.0f, 0.0f,
-         25.0f, -25.0f, 0.0f,
-         25.0f,  25.0f, 0.0f,
-
-        -25.0f, -25.0f, 0.0f,
-         25.0f,  25.0f, 0.0f,
-        -25.0f,  25.0f, 0.0f
-    };
-    GLuint VBO, VAO;
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
-    glBindVertexArray(VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (void*)0);
-    glEnableVertexAttribArray(0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    return VAO;
+	if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
+		glfwSetWindowShouldClose(window, GL_TRUE);
 }
 
 int setupShader()
@@ -143,14 +127,71 @@ int setupShader()
 	GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
 	glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
 	glCompileShader(vertexShader);
+
+	GLint success;
+	GLchar infoLog[512];
+	glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
+	if (!success)
+	{
+		glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
+		std::cout << "ERROR::SHADER::VERTEX::COMPILATION_FAILED\n" << infoLog << std::endl;
+	}
+
 	GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
 	glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
 	glCompileShader(fragmentShader);
+
+	glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
+	if (!success)
+	{
+		glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
+		std::cout << "ERROR::SHADER::FRAGMENT::COMPILATION_FAILED\n" << infoLog << std::endl;
+	}
+
 	GLuint shaderProgram = glCreateProgram();
 	glAttachShader(shaderProgram, vertexShader);
 	glAttachShader(shaderProgram, fragmentShader);
 	glLinkProgram(shaderProgram);
+
+	glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
+	if (!success)
+	{
+		glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
+		std::cout << "ERROR::SHADER::PROGRAM::LINKING_FAILED\n" << infoLog << std::endl;
+	}
+
 	glDeleteShader(vertexShader);
 	glDeleteShader(fragmentShader);
+
 	return shaderProgram;
+}
+
+int setupGeometry()
+{
+	GLfloat vertices[] = {
+		// x      y        z      R     G     B
+		400.0, 100.0,   0.0,   1.0,  1.0,  0.0,
+		200.0, 500.0,   0.0,   1.0,  0.5,  0.0,
+		600.0, 500.0,   0.0,   1.0,  0.2,  0.0,
+	};
+
+	GLuint VBO, VAO;
+
+	glGenBuffers(1, &VBO);
+	glBindBuffer(GL_ARRAY_BUFFER, VBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+	glGenVertexArrays(1, &VAO);
+	glBindVertexArray(VAO);
+
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (GLvoid*)0);
+	glEnableVertexAttribArray(0);
+
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (GLvoid*)(3 * sizeof(GLfloat)));
+	glEnableVertexAttribArray(1);
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindVertexArray(0);
+
+	return VAO;
 }
